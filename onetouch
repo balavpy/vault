@@ -1,0 +1,36 @@
+#!/bin/bash
+echo "Creating the Root CA PKI Engine";
+vault secrets enable pki ; vault secrets tune -max-lease-ttl=87600h pki
+sleep 3;
+echo "Creating the Root Certificate";
+vault write -field=certificate pki/root/generate/internal common_name="us-west-2.compute.amazonaws.com" ttl=87600h  > CA_cert.crt
+sleep 3;
+echo "Updating Issuing certificate and CRL in the ROOT CA Config";
+vault write pki/config/urls issuing_certificates="$VAULT_ADDR/v1/pki/ca"  crl_distribution_points="$VAULT_ADDR/v1/pki/crl"
+sleep 3;
+echo "Creating the Intermediate CA PKI Engine";
+vault secrets enable -path=pki_int pki; vault secrets tune -max-lease-ttl=43800h pki_int
+sleep 3;
+echo "Creating the Intermediate Certificate and Signing process to Root CA";
+vault write -format=json pki_int/intermediate/generate/internal common_name="us-west-2.compute.amazonaws.com Intermediate Authority" | jq -r '.data.csr' > pki_intermediate.csr
+sleep 3;
+vault write -format=json pki/root/sign-intermediate csr=@pki_intermediate.csr format=pem_bundle ttl="43800h" | jq -r '.data.certificate' > intermediate.cert.pem
+sleep 3;
+echo "Impoting signed certificate to intermediate engine";
+vault write pki_int/intermediate/set-signed certificate=@intermediate.cert.pem 
+sleep 3; echo "Creating role";
+vault write pki_int/roles/us-west-2.compute.amazonaws.com allowed_domains="us-west-2.compute.amazonaws.com" allow_subdomains=true  max_ttl="720h"
+sleep 3; echo " generating the grafana certificate"
+./cert_gen.sh grafana ec2-18-236-82-255.us-west-2.compute.amazonaws.com 5m
+sleep 3;
+echo "Coping certificate to the app directory";
+sudo cp -r  /home/ec2-user/cert/output/grafana/grafana_*.pem /etc/grafana/
+sudo mv /etc/grafana/grafana1.ini /etc/grafana/grafana.ini
+sudo chown root:grafana /etc/grafana/grafana.ini
+sudo chmod 0644 /etc/grafana/grafana_*.pem
+sudo systemctl restart grafana-server;
+sudo systemctl status grafana-server | grep Active | cut -d" " -f4,6;
+echo "***************************************"
+echo "No worries your certificate will renewal automtically without any touch"
+echo "*************************************"
+nohup sudo /etc/grafana/consul-template -config /etc/grafana/consul-template.hcl &
