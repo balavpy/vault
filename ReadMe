@@ -1,0 +1,25 @@
+Installation
+==========
+sudo yum -y install jq , mod_ssl
+sudo yum-config-manager --add-repo https://rpm.releases.hashicorp.com/AmazonLinux/hashicorp.repo;sudo yum -y install vault
+wget https://dl.grafana.com/oss/release/grafana-8.0.0~beta3-1.x86_64.rpm; sudo yum install grafana-8.0.0~beta3-1.x86_64.rpm
+
+vim on	
+sudo systemctl start vault
+
+sudo wget https://releases.hashicorp.com/consul-template/0.26.0/consul-template_0.26.0_linux_amd64.zip
+sudo unzip consul-template_0.26.0_linux_amd64.zip
+
+Vault-Config
+============
+
+export VAULT_TOKEN=s.MoyBxikAoWs5viavTfBClMkS
+export VAULT_ADDR=http://18.236.82.255:8200
+
+api_addr = "http://34.209.241.52:8200"
+cluster_addr = "https://34.209.241.52:8201"
+
+
+vault policy write pki pki.hcl
+
+vault token create -policy="pki" -period=24h -orphan
